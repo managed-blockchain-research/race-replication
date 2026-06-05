@@ -1,0 +1,43 @@
+test:
+  name: race-staged-besu
+  description: "RACE evaluation (Besu): Staged overload 10->40->100 TPS with external RACE controller."
+  workers:
+    type: local
+    number: 30
+  rounds:
+    - label: stage1_10tps
+      txDuration: 30
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 10
+      workload:
+        module: benchmarks/stateBloatRaceBesu.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+    - label: stage2_40tps
+      txDuration: 30
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 40
+      workload:
+        module: benchmarks/stateBloatRaceBesu.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+    - label: stage3_100tps
+      txDuration: 60
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 100
+      workload:
+        module: benchmarks/stateBloatRaceBesu.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB

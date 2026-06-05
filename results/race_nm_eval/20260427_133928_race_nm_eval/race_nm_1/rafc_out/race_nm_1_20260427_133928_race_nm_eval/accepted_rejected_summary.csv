@@ -1,0 +1,2 @@
+accepted_tx_count,rejected_tx_count,rejection_reason_breakdown
+6004,1616,ReplacementNotAllowed:876;FeeTooLowToCompete:740

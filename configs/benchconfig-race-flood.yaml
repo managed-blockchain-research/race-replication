@@ -1,0 +1,47 @@
+test:
+  name: race-flood-aura
+  description: "RACE evaluation: AuRa 1s blocks, 200M gas/block, 50 TPS capacity.
+    Stage1=30 TPS (normal), Stage2=150 TPS (3x capacity, fills mempool, RACE PACING),
+    Stage3=30 TPS (recovery). stateBloat 200 SSTOREs/tx = 4M gas/tx."
+  workers:
+    type: local
+    number: 1
+  rounds:
+    - label: stage1_normal_30tps
+      txDuration: 60
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 30
+      workload:
+        module: benchmarks/stateBloat.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+
+    - label: stage2_flood_150tps
+      txDuration: 120
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 150
+      workload:
+        module: benchmarks/stateBloat.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+
+    - label: stage3_recovery_30tps
+      txDuration: 60
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 30
+      workload:
+        module: benchmarks/stateBloat.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB

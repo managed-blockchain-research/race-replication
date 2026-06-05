@@ -1,0 +1,2 @@
+accepted_tx_count,rejected_tx_count,rejection_reason_breakdown
+12834,7057,"FeeTooLowToCompete:7009;RacePacingRejected, RACE action=reject_pacing:48"
