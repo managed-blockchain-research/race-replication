@@ -1,0 +1,23 @@
+variant,run,client,# session_start_utc=2026-09-16T02:54:40.8790000Z
+race,1,nm,gen,pause_ms,suspend_start_ms
+race,1,nm,0,83.34,76135.61
+race,1,nm,0,17.45,76305.76
+race,1,nm,1,284.77,254134.68
+race,2,nm,gen,pause_ms,suspend_start_ms
+race,2,nm,0,86.29,62175.65
+race,2,nm,0,16.83,62359.88
+race,2,nm,1,351.95,222172.02
+race,3,nm,gen,pause_ms,suspend_start_ms
+race,3,nm,0,78.17,60051.09
+race,3,nm,0,16.96,60218.79
+race,3,nm,1,296.87,193595.19
+race,4,nm,gen,pause_ms,suspend_start_ms
+race,4,nm,0,80.84,75278.86
+race,4,nm,0,16.84,75433.08
+race,4,nm,1,341.37,237270.22
+race,5,nm,gen,pause_ms,suspend_start_ms
+race,5,nm,2,11.65,22007.96
+race,5,nm,2,19.48,22070.32
+race,5,nm,1,134.92,48004.14
+race,5,nm,1,198.58,167030.59
+race,5,nm,1,13.49,167820.36

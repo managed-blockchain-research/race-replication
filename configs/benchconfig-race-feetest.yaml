@@ -1,0 +1,49 @@
+test:
+  name: race-feetest-clique
+  description: "Fee-aware PACING ablation: 2 workers, worker0 = 'spam' tier
+    (1 gwei-ish fixed base price), worker1 = 'legit' tier (5x base price).
+    Flood round drives RACE into PACING/SURVIVAL; compare each tier's
+    admission rate under (a) fee-agnostic random drop (race.fee.aware.enabled=false)
+    vs (b) fee-aware drop (race.fee.aware.enabled=true)."
+  workers:
+    type: local
+    number: 2
+  rounds:
+    - label: warmup_20tps
+      txDuration: 30
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 20
+      workload:
+        module: benchmarks/stateBloatRaceFeeTest.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+
+    - label: flood_150tps
+      txDuration: 120
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 150
+      workload:
+        module: benchmarks/stateBloatRaceFeeTest.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+
+    - label: cooldown_20tps
+      txDuration: 30
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 20
+      workload:
+        module: benchmarks/stateBloatRaceFeeTest.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB

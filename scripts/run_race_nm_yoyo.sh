@@ -1,19 +1,23 @@
 #!/bin/bash
 # ============================================================
-# RACE Evaluation — Nethermind / 1 GB / Staged 10→40→100 TPS
+# RACE Yo-Yo Adversarial Evaluation — Nethermind / 512 MB
 #
-# Variants (2 × 5 reps = 10 runs):
-#   baseline : NM without RACE (--Race.Enabled=false)
-#   race     : NM with RACE enabled (--Race.Enabled=true)
+# Attacker alternates short 150 TPS bursts (enough to drive RACE into
+# SURVIVAL, per the 2026-09-16 flood-eval finding that H_t saturates
+# and stays pinned) with near-idle 5 TPS "legitimate traffic" windows,
+# then repeats. RACE variant only — no baseline (there's nothing to
+# throttle without RACE, so a baseline run has no adversarial content).
 #
 # Primary metrics:
-#   - RACE: RPI time-series, mode fraction (combined_metrics.csv)
-#   - GC:   dotnet-trace → NettraceGcParser → gc_events.csv
-#   - Load: Caliper confirmed TPS per stage (caliper_console.log)
+#   - RACE: RPI/mode time-series (combined_metrics.csv) — does the
+#     controller return to NORMAL/PACING promptly once the attacker
+#     stops, or does it keep rejecting the 5 TPS "legitimate" traffic
+#     for a while (self-censorship persistence)?
+#   - Does a second attack burst re-enter SURVIVAL faster than the
+#     first (i.e. does H_t never fully recover between bursts)?
 #
 # NM binary: /home/yeochan.yoon/nethermind-race-built/nethermind.dll
-# TxPool.Size: 8192
-# Output: results/race_nm_eval/<RUN_ID>/
+# Output: results/race_nm_yoyo/<RUN_ID>/
 # ============================================================
 set -e
 cd /home/yeochan.yoon/caliper-stress-test
@@ -26,25 +30,25 @@ DT_BIN="${HOME}/.dotnet/tools/dotnet-trace"
 NM_CFG="/home/yeochan.yoon/caliper-stress-test/nethermind-caliper-config/caliper_race_aura_cfg.json"
 
 # ── Caliper config ────────────────────────────────────────────────────────────
-BENCHCONFIG="benchconfig-race-flood.yaml"
+BENCHCONFIG="benchconfig-race-yoyo.yaml"
 NETWORKCONFIG="networkconfig_race_nm.json"
 DEPLOY_NM="deploy_multi_contracts_nm.js"
 
 # ── Parameters ────────────────────────────────────────────────────────────────
 HEAP_NM=512000000
-REPLICATIONS="${REPLICATIONS:-5}"
+REPLICATIONS="${REPLICATIONS:-3}"
 RACE_OUTPUT_ROOT="/home/yeochan.yoon/caliper-stress-test/results/race_nm_eval_race"
 
 export DOTNET_ROOT="/home/yeochan.yoon/.dotnet"
 export PATH="${DOTNET_ROOT}:${PATH}:${HOME}/.dotnet/tools"
 
 # ── Output directory ──────────────────────────────────────────────────────────
-RUN_ID=$(date +%Y%m%d_%H%M%S)_race_nm_eval
-RESULTS_DIR="/home/yeochan.yoon/caliper-stress-test/results/race_nm_eval/${RUN_ID}"
+RUN_ID=$(date +%Y%m%d_%H%M%S)_race_nm_yoyo
+RESULTS_DIR="/home/yeochan.yoon/caliper-stress-test/results/race_nm_yoyo/${RUN_ID}"
 mkdir -p "${RESULTS_DIR}"
 
 echo "======================================================================"
-echo "RACE NM Evaluation | AuRa 1s blocks | Flood 30→150→30 TPS | 1 GB | 5 reps"
+echo "RACE Yo-Yo Adversarial Eval | NM | AuRa 1s blocks | 512 MB | ${REPLICATIONS:-3} reps"
 echo "Run ID: ${RUN_ID}"
 echo "======================================================================"
 
@@ -178,8 +182,8 @@ json.dump(d, open(p, 'w'), indent=2)
             --output "${nettrace}" > "${run_dir}/dotnet_trace.log" 2>&1 &
         dt_pid=$!; echo "  dotnet-trace PID: ${dt_pid}"; }
 
-    # stage1(60s) + stage2(120s) + stage3(60s) = 240s + margin → 900s timeout
-    echo "  Running Caliper (30→150→30 TPS flood, 240s total)..."
+    # warmup(30s) + on1(60s) + off1(90s) + on2(60s) + off2(90s) = 330s + margin
+    echo "  Running Caliper (Yo-Yo: 10->150->5->150->5 TPS, 330s total)..."
     # 900s already had some margin, but bumped further for the same reason as
     # the Besu script: txWallClockTimeout is now 300s, so pending txs from the
     # flood stage can legitimately take up to 300s each to resolve to Fail.
@@ -253,19 +257,9 @@ pkill -9 -f "nethermind.dll" 2>/dev/null || true
 fuser -k 8545/tcp 8546/tcp 2>/dev/null || true
 sleep 3
 
-# ── Phase 1: Baseline ─────────────────────────────────────────────────────────
-if [ "${SKIP_BASELINE:-0}" = "1" ]; then
-    echo ""; echo "=============================="; echo "PHASE 1: SKIPPED (SKIP_BASELINE=1)"; echo "=============================="
-else
-    echo ""; echo "=============================="; echo "PHASE 1: ${REPLICATIONS}×BASELINE / NM"; echo "=============================="
-    for i in $(seq 1 ${REPLICATIONS}); do
-        run_nm_single "baseline" "${i}" || echo "  WARNING: baseline_nm_${i} failed"
-        [ "${i}" -lt "${REPLICATIONS}" ] && sleep 30
-    done
-fi
-
-# ── Phase 2: RACE ─────────────────────────────────────────────────────────────
-echo ""; echo "=============================="; echo "PHASE 2: ${REPLICATIONS}×RACE / NM"; echo "=============================="
+# ── Phase 1: RACE only (no baseline — this is an adversarial-pattern study of
+#    RACE's own controller behavior, not a baseline-vs-RACE GC comparison) ────
+echo ""; echo "=============================="; echo "PHASE 1: ${REPLICATIONS}×RACE (Yo-Yo pattern) / NM"; echo "=============================="
 for i in $(seq 1 ${REPLICATIONS}); do
     run_nm_single "race" "${i}" || echo "  WARNING: race_nm_${i} failed"
     [ "${i}" -lt "${REPLICATIONS}" ] && sleep 30

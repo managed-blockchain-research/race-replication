@@ -1,0 +1,17 @@
+RACE Fee-Aware-PACING Ablation — besu-source / 1 GB / Clique 1s blocks
+=====================================================================================
+Run ID: 20260916_141629_race_besu_feetest | Date: Wed Sep 16 14:16:29 KST 2026 | Host: compute23
+Besu:     /home/yeochan.yoon/besu-source/build/install/besu/bin/besu (cc277c9 Make RESIDENT_FLOOR/EMERGENCY_FLOOR/spill-tick knobs configurable via -D properties)
+Genesis:  clique_race_feetest_genesis.json (Clique 1s blocks, gasLimit=200M; funds worker0 AND worker1)
+Heap:     -Xmx1g
+Load:     2 workers, 20 TPS 30s -> 150 TPS 120s -> 20 TPS 30s (stateBloat 200 slots)
+          worker0 = spam tier (1 gwei-ish base price), worker1 = legit tier (5x base price)
+Variants:
+  fee_agnostic : -Drace.fee.aware.enabled=false (uniform random drop, all prior evals' behaviour)
+  fee_aware    : -Drace.fee.aware.enabled=true  (drop probability scaled by price vs rolling EMA)
+RACE thresholds (identical to the main flood eval, RACE ON in both variants):
+  NormalToPacing=0.20, PacingToNormal=0.13
+  PacingToSurvival=0.26, SurvivalToPacing=0.19
+  pacingAcceptRatio=0.35, survivalAcceptRatio=0.15
+  sampleIntervalMs=500, mempoolNormalizationSize=4096
+  feeEmaLambda=0.02 (default), feeMultiplierRange=[0.2, 2.0] (default)

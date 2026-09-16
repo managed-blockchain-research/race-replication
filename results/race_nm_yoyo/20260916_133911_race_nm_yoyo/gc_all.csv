@@ -1,0 +1,10 @@
+variant,run,client,# session_start_utc=2026-09-16T04:39:38.5620000Z
+race,1,nm,gen,pause_ms,suspend_start_ms
+race,1,nm,0,80.60,59453.61
+race,1,nm,0,21.05,59606.19
+race,2,nm,gen,pause_ms,suspend_start_ms
+race,2,nm,0,77.27,57871.37
+race,2,nm,0,17.64,58028.33
+race,3,nm,gen,pause_ms,suspend_start_ms
+race,3,nm,0,81.53,59259.70
+race,3,nm,0,17.94,59418.97

@@ -1,0 +1,6 @@
+variant,run,client,# session_start_utc=2026-09-16T04:52:08.3860000Z
+baseline,2,nm,gen,pause_ms,suspend_start_ms
+baseline,2,nm,2,10.40,21650.84
+baseline,2,nm,2,22.15,21731.65
+baseline,2,nm,0,72.78,26638.37
+baseline,2,nm,1,291.29,194651.21

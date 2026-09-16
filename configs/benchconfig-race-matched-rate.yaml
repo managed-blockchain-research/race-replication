@@ -1,8 +1,11 @@
 test:
-  name: race-flood-aura
-  description: "RACE evaluation: AuRa 1s blocks, 200M gas/block, 50 TPS capacity.
-    Stage1=30 TPS (normal), Stage2=150 TPS (3x capacity, fills mempool, RACE PACING),
-    Stage3=30 TPS (recovery). stateBloat 200 SSTOREs/tx = 4M gas/tx."
+  name: race-matched-rate-aura
+  description: "Equal-throughput ablation: baseline (RACE disabled) with the
+    'flood' round's offered TPS reduced from 150 to 19 TPS, matching RACE's
+    own measured effective admitted rate during the 150 TPS flood
+    (mean 18.7 TPS across 5 reps, see race_nm_eval/20260916_115414_race_nm_eval).
+    Tests whether RACE's GC reduction is due to smarter admission or simply
+    admitting fewer transactions."
   workers:
     type: local
     number: 1
@@ -20,12 +23,12 @@ test:
           numContracts: 30
           contractPrefix: SB
 
-    - label: stage2_flood_150tps
+    - label: stage2_matched_19tps
       txDuration: 120
       rateControl:
         type: fixed-rate
         opts:
-          tps: 150
+          tps: 19
       workload:
         module: benchmarks/stateBloatRace.js
         arguments:

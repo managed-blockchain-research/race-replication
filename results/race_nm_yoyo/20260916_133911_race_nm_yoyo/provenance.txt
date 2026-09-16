@@ -1,0 +1,15 @@
+RACE Evaluation — Nethermind / 512 MB / Flood 30→150→30 TPS
+=============================================================
+Run ID: 20260916_133911_race_nm_yoyo | Date: Wed Sep 16 13:39:11 KST 2026 | Host: compute10
+NM Binary: /home/yeochan.yoon/nethermind-race-built/nethermind.dll
+Config:  /home/yeochan.yoon/caliper-stress-test/nethermind-caliper-config/caliper_race_aura_cfg.json
+Heap:    DOTNET_GCHeapHardLimit=512000000
+TxPool:  Size=4096
+Load:    30 TPS 60s → 150 TPS 120s → 30 TPS 60s (stateBloat 200 slots, AuRa 1s blocks)
+Variants:
+  baseline : RACE disabled
+  race     : RACE enabled (NormalToPacing=0.20, PacingToSurvival=0.26, EnableSurvival=true)
+RACE thresholds:
+  NormalToPacing=0.20, PacingToNormal=0.13
+  PacingToSurvival=0.26, SurvivalToPacing=0.19
+  SampleIntervalMs=500

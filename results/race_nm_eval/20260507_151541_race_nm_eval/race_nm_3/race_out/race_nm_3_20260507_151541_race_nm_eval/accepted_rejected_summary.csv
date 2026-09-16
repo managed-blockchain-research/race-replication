@@ -1,2 +1,0 @@
-accepted_tx_count,rejected_tx_count,rejection_reason_breakdown
-3550,16340,"RacePacingRejected, RACE action=reject_survival:15041;RacePacingRejected, RACE action=reject_pacing:1277;ReplacementNotAllowed:18;nonce too low:4"

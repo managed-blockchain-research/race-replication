@@ -1,24 +1,32 @@
 #!/bin/bash
 # ============================================================
-# RACE Evaluation — Besu / 1 GB / Staged 10→40→100 TPS
+# RACE Fee-Aware-PACING Ablation — Besu / 1 GB
 #
-# Internal RACE controller implemented in Besu TxPool
-# (RaceFlowController.java), activated via -Drace.enabled=true.
-# Both variants use identical load (stateBloat.js), isolating
-# the effect of RACE ingress throttling.
+# 2-worker fee-differentiated flood (benchconfig-race-feetest.yaml):
+# worker0 = "spam" tier (1 gwei-ish fixed base price), worker1 = "legit"
+# tier (5x base price). RACE PACING/SURVIVAL is ACTIVE in both variants
+# (there's nothing to compare without throttling); the two variants
+# differ only in whether the drop decision is fee-aware:
 #
-# Variants (2 × 5 reps = 10 runs):
-#   baseline : Besu without RACE (-Drace.enabled=false)
-#   race     : Besu with RACE enabled (-Drace.enabled=true)
+# Variants (2 x n reps):
+#   fee_agnostic : -Drace.fee.aware.enabled=false (uniform random drop,
+#                  matching every prior RACE evaluation's behaviour)
+#   fee_aware    : -Drace.fee.aware.enabled=true  (drop probability scaled
+#                  by tx price vs a rolling EMA of observed prices)
 #
-# Primary metrics:
-#   - RACE: combined_metrics.csv (RPI time-series, mode fractions)
-#   - GC:   G1GC log → parse_besu_gc.py (pause times, Full GC count)
-#   - Load: Caliper confirmed TPS per stage
+# Both variants run with -Drace.decision.log.enabled=true, writing a
+# per-transaction (price, mode, accepted) row to
+# race_out/.../admission_decisions.csv -- the ground-truth source for
+# per-tier admission-rate analysis (Besu has no accepted/rejected-count
+# telemetry in combined_metrics.csv the way NM does).
 #
-# Besu binary: besu-source (24.1.1, built with RaceFlowController)
-# Heap: 512m (-Xmx512m)
-# Output: results/race_besu_eval/<RUN_ID>/
+# Primary question: does fee-aware PACING preserve worker1 (legit,
+# high-fee) admission rate relative to worker0 (spam, low-fee)
+# significantly more than the fee-agnostic baseline does?
+#
+# Besu binary: besu-source (24.1.1, built with fee-aware RaceFlowController)
+# Heap: 1g (-Xmx1g)
+# Output: results/race_besu_feetest/<RUN_ID>/
 # ============================================================
 set -e
 cd /home/yeochan.yoon/caliper-stress-test
@@ -37,22 +45,23 @@ BESU_BIN="/home/yeochan.yoon/besu-source/build/install/besu/bin/besu"
 LOG4J_CONFIG="/home/yeochan.yoon/caliper-stress-test/log4j2-console.xml"
 
 # ── Caliper config ────────────────────────────────────────────────────────────
-BENCHCONFIG="benchconfig-race-flood.yaml"
-NETWORKCONFIG="networkconfig_race.json"
-DEPLOY_BESU="deploy_multi_contracts_race.py"
+BENCHCONFIG="benchconfig-race-feetest.yaml"
+NETWORKCONFIG="networkconfig_race_feetest.json"
+DEPLOY_BESU="deploy_multi_contracts_race_feetest.py"
+GENESIS_FILE="clique_race_feetest_genesis.json"
 
 # ── Parameters ────────────────────────────────────────────────────────────────
 HEAP="1g"
-REPLICATIONS="${REPLICATIONS:-5}"
+REPLICATIONS="${REPLICATIONS:-3}"
 METRICS_PORT=9545
 
 # ── Output directory ──────────────────────────────────────────────────────────
-RUN_ID=$(date +%Y%m%d_%H%M%S)_race_besu_eval
-RESULTS_DIR="/home/yeochan.yoon/caliper-stress-test/results/race_besu_eval/${RUN_ID}"
+RUN_ID=$(date +%Y%m%d_%H%M%S)_race_besu_feetest
+RESULTS_DIR="/home/yeochan.yoon/caliper-stress-test/results/race_besu_feetest/${RUN_ID}"
 mkdir -p "${RESULTS_DIR}"
 
 echo "======================================================================"
-echo "RACE Besu Evaluation | Clique 1s blocks | Flood 30→150→30 TPS | 1 GB | 5 reps"
+echo "RACE Fee-Aware-PACING Ablation | Besu | Clique 1s | 1 GB | ${REPLICATIONS} reps"
 echo "Run ID: ${RUN_ID}"
 echo "======================================================================"
 
@@ -98,11 +107,11 @@ run_besu_single() {
     fuser -k 8545/tcp 8546/tcp 30303/tcp ${METRICS_PORT}/tcp 2>/dev/null || true
     sleep 5; rm -rf "${data_dir}"; mkdir -p "${data_dir}"
 
-    # Build RACE JVM args
-    local race_jvm_opts="-Drace.enabled=false"
-    if [ "${variant}" = "race" ]; then
-        mkdir -p "${race_out_dir}"
-        race_jvm_opts="-Drace.enabled=true \
+    # Build RACE JVM args -- RACE is ON in both variants; only fee-awareness differs.
+    local fee_aware_flag="false"
+    [ "${variant}" = "fee_aware" ] && fee_aware_flag="true"
+    mkdir -p "${race_out_dir}"
+    local race_jvm_opts="-Drace.enabled=true \
 -Drace.output.path=${race_out_dir} \
 -Drace.run.id=${label}_${RUN_ID} \
 -Drace.normal.to.pacing.threshold=0.20 \
@@ -113,8 +122,9 @@ run_besu_single() {
 -Drace.survival.accept.ratio=0.15 \
 -Drace.sample.interval.ms=500 \
 -Drace.enable.survival=true \
--Drace.mempool.normalization.size=4096"
-    fi
+-Drace.mempool.normalization.size=4096 \
+-Drace.fee.aware.enabled=${fee_aware_flag} \
+-Drace.decision.log.enabled=true"
 
     local java_opts="-Xms${HEAP} -Xmx${HEAP} \
 -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapWastePercent=5 \
@@ -125,7 +135,7 @@ run_besu_single() {
 ${race_jvm_opts}"
     export BESU_OPTS="${java_opts}"
 
-    nohup "${BESU_BIN}" --genesis-file="${PWD}/clique_race_genesis.json" \
+    nohup "${BESU_BIN}" --genesis-file="${PWD}/${GENESIS_FILE}" \
         --node-private-key-file="/home/yeochan.yoon/banning/clients/besu-lass-raac/benchmark/config/besu-keystore/key" \
         --miner-enabled \
         --miner-coinbase=0xc0A8e4D217eB85b812aeb1226fAb6F588943C2C2 \
@@ -185,8 +195,8 @@ ${race_jvm_opts}"
         echo "  GC: Young=${young_count} Full=${full_count}"
     fi
 
-    # RACE summary
-    if [ "${variant}" = "race" ]; then
+    # RACE summary (RACE is on in both variants here)
+    if true; then
         local metrics_csv
         metrics_csv=$(find "${race_out_dir}" -name "combined_metrics.csv" 2>/dev/null | head -1)
         if [ -f "${metrics_csv}" ]; then
@@ -199,6 +209,7 @@ ${race_jvm_opts}"
             echo "  RACE: no combined_metrics.csv found"
         fi
         find "${race_out_dir}" -name "mode_transitions.log" -exec cp {} "${run_dir}/" \; 2>/dev/null || true
+        find "${race_out_dir}" -name "admission_decisions.csv" -exec cp {} "${run_dir}/" \; 2>/dev/null || true
     fi
 
     grep "| stage" "${run_dir}/caliper_console.log" | sed 's/^/  Caliper: /' || true
@@ -208,23 +219,23 @@ ${race_jvm_opts}"
 # ── Provenance ────────────────────────────────────────────────────────────────
 BESU_COMMIT=$(cd /home/yeochan.yoon/besu-source && git log --oneline -1 2>/dev/null || echo "unknown")
 cat > "${RESULTS_DIR}/provenance.txt" <<EOF
-RACE Besu Evaluation — besu-source / 1 GB / Clique 1s blocks / Flood 30→150→30 TPS
+RACE Fee-Aware-PACING Ablation — besu-source / 1 GB / Clique 1s blocks
 =====================================================================================
 Run ID: ${RUN_ID} | Date: $(date) | Host: $(hostname)
 Besu:     ${BESU_BIN} (${BESU_COMMIT})
-Genesis:  clique_race_genesis.json (Clique 1s blocks, gasLimit=200M → ~50 TPS capacity)
+Genesis:  ${GENESIS_FILE} (Clique 1s blocks, gasLimit=200M; funds worker0 AND worker1)
 Heap:     -Xmx1g
-TxPool:   LAYERED pool (ESpill disabled), layer-max=64MB, max-prioritized=16384, normalization=4096
-Load:     30 TPS 60s → 150 TPS 120s → 30 TPS 60s (stateBloat 200 slots, 3× capacity)
-GasPrice: 1 gwei (1e9 wei) — above EIP-1559 baseFee growth throughout flood stage
+Load:     2 workers, 20 TPS 30s -> 150 TPS 120s -> 20 TPS 30s (stateBloat 200 slots)
+          worker0 = spam tier (1 gwei-ish base price), worker1 = legit tier (5x base price)
 Variants:
-  baseline : RACE disabled (-Drace.enabled=false)
-  race     : RACE enabled (-Drace.enabled=true, internal TxPool throttle)
-RACE thresholds:
+  fee_agnostic : -Drace.fee.aware.enabled=false (uniform random drop, all prior evals' behaviour)
+  fee_aware    : -Drace.fee.aware.enabled=true  (drop probability scaled by price vs rolling EMA)
+RACE thresholds (identical to the main flood eval, RACE ON in both variants):
   NormalToPacing=0.20, PacingToNormal=0.13
   PacingToSurvival=0.26, SurvivalToPacing=0.19
   pacingAcceptRatio=0.35, survivalAcceptRatio=0.15
   sampleIntervalMs=500, mempoolNormalizationSize=4096
+  feeEmaLambda=0.02 (default), feeMultiplierRange=[0.2, 2.0] (default)
 EOF
 
 # ── Pre-flight ────────────────────────────────────────────────────────────────
@@ -232,17 +243,17 @@ pkill -9 -f "hyperledger.besu.Besu" 2>/dev/null || true
 fuser -k 8545/tcp 8546/tcp 30303/tcp ${METRICS_PORT}/tcp 2>/dev/null || true
 sleep 3
 
-# ── Phase 1: Baseline ─────────────────────────────────────────────────────────
-echo ""; echo "=============================="; echo "PHASE 1: ${REPLICATIONS}×BASELINE / BESU"; echo "=============================="
+# ── Phase 1: fee-agnostic (uniform random drop) ──────────────────────────────
+echo ""; echo "=============================="; echo "PHASE 1: ${REPLICATIONS}×FEE_AGNOSTIC / BESU"; echo "=============================="
 for i in $(seq 1 ${REPLICATIONS}); do
-    run_besu_single "baseline" "${i}" || echo "  WARNING: baseline_besu_${i} failed"
+    run_besu_single "fee_agnostic" "${i}" || echo "  WARNING: fee_agnostic_besu_${i} failed"
     [ "${i}" -lt "${REPLICATIONS}" ] && sleep 30
 done
 
-# ── Phase 2: RACE ─────────────────────────────────────────────────────────────
-echo ""; echo "=============================="; echo "PHASE 2: ${REPLICATIONS}×RACE / BESU"; echo "=============================="
+# ── Phase 2: fee-aware drop ───────────────────────────────────────────────────
+echo ""; echo "=============================="; echo "PHASE 2: ${REPLICATIONS}×FEE_AWARE / BESU"; echo "=============================="
 for i in $(seq 1 ${REPLICATIONS}); do
-    run_besu_single "race" "${i}" || echo "  WARNING: race_besu_${i} failed"
+    run_besu_single "fee_aware" "${i}" || echo "  WARNING: fee_aware_besu_${i} failed"
     [ "${i}" -lt "${REPLICATIONS}" ] && sleep 30
 done
 

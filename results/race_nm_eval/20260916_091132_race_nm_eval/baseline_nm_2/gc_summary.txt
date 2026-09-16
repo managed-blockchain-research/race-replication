@@ -1,0 +1,14 @@
+gen0_gc_count=2
+gen1_gc_count=1
+gen2_gc_count=1
+total_gc_count=4
+trace_duration_s=245.2
+total_pause_count=4
+total_pause_ms=731.8
+avg_pause_ms=182.94
+contention_count=0
+total_contention_ms=0.0
+max_contention_ms=0.0
+max_contention_at_ms=0.0
+min_active_worker_threads=0
+max_active_worker_threads=0

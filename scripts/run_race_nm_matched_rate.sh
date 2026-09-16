@@ -1,19 +1,21 @@
 #!/bin/bash
 # ============================================================
-# RACE Evaluation — Nethermind / 1 GB / Staged 10→40→100 TPS
+# RACE Equal-Throughput Ablation — Nethermind / 512 MB
 #
-# Variants (2 × 5 reps = 10 runs):
-#   baseline : NM without RACE (--Race.Enabled=false)
-#   race     : NM with RACE enabled (--Race.Enabled=true)
+# Baseline (RACE disabled) with the flood round's offered rate reduced
+# from 150 TPS to 19 TPS -- RACE's own measured effective admitted rate
+# during the 150 TPS flood (mean 18.7 TPS across the 5-rep
+# 20260916_115414_race_nm_eval dataset). Tests whether RACE's GC
+# reduction comes from smarter admission or merely from admitting fewer
+# transactions: if this rate-matched baseline's GC matches RACE's GC,
+# RACE provides no benefit beyond volume reduction; if this baseline's
+# GC is still worse than RACE's, RACE has a real effect beyond volume.
 #
-# Primary metrics:
-#   - RACE: RPI time-series, mode fraction (combined_metrics.csv)
-#   - GC:   dotnet-trace → NettraceGcParser → gc_events.csv
-#   - Load: Caliper confirmed TPS per stage (caliper_console.log)
+# Only the "baseline" (RACE disabled) variant is run here -- RACE-enabled
+# numbers already exist in race_nm_eval/20260916_115414_race_nm_eval.
 #
 # NM binary: /home/yeochan.yoon/nethermind-race-built/nethermind.dll
-# TxPool.Size: 8192
-# Output: results/race_nm_eval/<RUN_ID>/
+# Output: results/race_nm_matched_rate/<RUN_ID>/
 # ============================================================
 set -e
 cd /home/yeochan.yoon/caliper-stress-test
@@ -26,8 +28,13 @@ DT_BIN="${HOME}/.dotnet/tools/dotnet-trace"
 NM_CFG="/home/yeochan.yoon/caliper-stress-test/nethermind-caliper-config/caliper_race_aura_cfg.json"
 
 # ── Caliper config ────────────────────────────────────────────────────────────
-BENCHCONFIG="benchconfig-race-flood.yaml"
-NETWORKCONFIG="networkconfig_race_nm.json"
+BENCHCONFIG="benchconfig-race-matched-rate.yaml"
+# Dedicated copy, not the shared networkconfig_race_nm.json -- that file is
+# actively read/written by the concurrently-running Yo-Yo experiment
+# (run_race_nm_yoyo.sh) on another host via the same NFS-shared home dir;
+# both scripts patch transactionPollingTimeout/etc. in place after deploy,
+# so sharing the file across concurrent runs risks a write race.
+NETWORKCONFIG="networkconfig_race_nm_matched.json"
 DEPLOY_NM="deploy_multi_contracts_nm.js"
 
 # ── Parameters ────────────────────────────────────────────────────────────────
@@ -39,12 +46,12 @@ export DOTNET_ROOT="/home/yeochan.yoon/.dotnet"
 export PATH="${DOTNET_ROOT}:${PATH}:${HOME}/.dotnet/tools"
 
 # ── Output directory ──────────────────────────────────────────────────────────
-RUN_ID=$(date +%Y%m%d_%H%M%S)_race_nm_eval
-RESULTS_DIR="/home/yeochan.yoon/caliper-stress-test/results/race_nm_eval/${RUN_ID}"
+RUN_ID=$(date +%Y%m%d_%H%M%S)_race_nm_matched_rate
+RESULTS_DIR="/home/yeochan.yoon/caliper-stress-test/results/race_nm_matched_rate/${RUN_ID}"
 mkdir -p "${RESULTS_DIR}"
 
 echo "======================================================================"
-echo "RACE NM Evaluation | AuRa 1s blocks | Flood 30→150→30 TPS | 1 GB | 5 reps"
+echo "RACE Equal-Throughput Ablation | NM | AuRa 1s blocks | 512 MB | ${REPLICATIONS:-5} reps"
 echo "Run ID: ${RUN_ID}"
 echo "======================================================================"
 
@@ -179,7 +186,7 @@ json.dump(d, open(p, 'w'), indent=2)
         dt_pid=$!; echo "  dotnet-trace PID: ${dt_pid}"; }
 
     # stage1(60s) + stage2(120s) + stage3(60s) = 240s + margin → 900s timeout
-    echo "  Running Caliper (30→150→30 TPS flood, 240s total)..."
+    echo "  Running Caliper (30->19->30 TPS, rate-matched to RACE's admitted rate, 240s total)..."
     # 900s already had some margin, but bumped further for the same reason as
     # the Besu script: txWallClockTimeout is now 300s, so pending txs from the
     # flood stage can legitimately take up to 300s each to resolve to Fail.
@@ -253,21 +260,10 @@ pkill -9 -f "nethermind.dll" 2>/dev/null || true
 fuser -k 8545/tcp 8546/tcp 2>/dev/null || true
 sleep 3
 
-# ── Phase 1: Baseline ─────────────────────────────────────────────────────────
-if [ "${SKIP_BASELINE:-0}" = "1" ]; then
-    echo ""; echo "=============================="; echo "PHASE 1: SKIPPED (SKIP_BASELINE=1)"; echo "=============================="
-else
-    echo ""; echo "=============================="; echo "PHASE 1: ${REPLICATIONS}×BASELINE / NM"; echo "=============================="
-    for i in $(seq 1 ${REPLICATIONS}); do
-        run_nm_single "baseline" "${i}" || echo "  WARNING: baseline_nm_${i} failed"
-        [ "${i}" -lt "${REPLICATIONS}" ] && sleep 30
-    done
-fi
-
-# ── Phase 2: RACE ─────────────────────────────────────────────────────────────
-echo ""; echo "=============================="; echo "PHASE 2: ${REPLICATIONS}×RACE / NM"; echo "=============================="
+# ── Phase 1: Rate-matched baseline (RACE disabled throughout) ────────────────
+echo ""; echo "=============================="; echo "PHASE 1: ${REPLICATIONS}×BASELINE-AT-19TPS / NM"; echo "=============================="
 for i in $(seq 1 ${REPLICATIONS}); do
-    run_nm_single "race" "${i}" || echo "  WARNING: race_nm_${i} failed"
+    run_nm_single "baseline" "${i}" || echo "  WARNING: baseline_nm_${i} failed"
     [ "${i}" -lt "${REPLICATIONS}" ] && sleep 30
 done
 
@@ -299,5 +295,5 @@ python3 scripts/plot_race_rpi.py \
     --out-prefix "${RESULTS_DIR}/figures/race" 2>/dev/null || true
 
 echo ""; echo "======================================================================"
-echo "RACE NM Evaluation complete. Results: ${RESULTS_DIR}"
+echo "RACE Equal-Throughput Ablation complete. Results: ${RESULTS_DIR}"
 echo "======================================================================"
