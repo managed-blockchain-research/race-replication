@@ -1,0 +1,50 @@
+test:
+  name: race-matched-rate-aura
+  description: "Equal-throughput ablation: baseline (RACE disabled) with the
+    'flood' round's offered TPS reduced from 150 to 19 TPS, matching RACE's
+    own measured effective admitted rate during the 150 TPS flood
+    (mean 18.7 TPS across 5 reps, see race_nm_eval/20260916_115414_race_nm_eval).
+    Tests whether RACE's GC reduction is due to smarter admission or simply
+    admitting fewer transactions."
+  workers:
+    type: local
+    number: 1
+  rounds:
+    - label: stage1_normal_30tps
+      txDuration: 60
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 30
+      workload:
+        module: benchmarks/stateBloatRace.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+
+    - label: stage2_matched_19tps
+      txDuration: 120
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 19
+      workload:
+        module: benchmarks/stateBloatRace.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+
+    - label: stage3_recovery_30tps
+      txDuration: 60
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 30
+      workload:
+        module: benchmarks/stateBloatRace.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB

@@ -1,0 +1,74 @@
+test:
+  name: race-yoyo-aura
+  description: "RACE Yo-Yo adversarial evaluation: AuRa 1s blocks, 512MB heap (NM).
+    Attacker alternates short 150 TPS bursts (enough to drive RACE into SURVIVAL)
+    with near-idle 5 TPS 'legitimate traffic' windows, to test whether admission
+    throttling persists (self-censorship) after the attacker stops."
+  workers:
+    type: local
+    number: 1
+  rounds:
+    - label: warmup_10tps
+      txDuration: 30
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 10
+      workload:
+        module: benchmarks/stateBloatRace.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+
+    - label: attack_on_1_150tps
+      txDuration: 60
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 150
+      workload:
+        module: benchmarks/stateBloatRace.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+
+    - label: attack_off_1_5tps
+      txDuration: 90
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 5
+      workload:
+        module: benchmarks/stateBloatRace.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+
+    - label: attack_on_2_150tps
+      txDuration: 60
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 150
+      workload:
+        module: benchmarks/stateBloatRace.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+
+    - label: attack_off_2_5tps
+      txDuration: 90
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 5
+      workload:
+        module: benchmarks/stateBloatRace.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB

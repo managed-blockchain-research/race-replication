@@ -1,0 +1,43 @@
+test:
+  name: race-staged-overload
+  description: "RACE evaluation: Staged overload 10->40->100 TPS. Builds mempool and GC pressure progressively."
+  workers:
+    type: local
+    number: 30
+  rounds:
+    - label: stage1_10tps
+      txDuration: 30
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 10
+      workload:
+        module: benchmarks/stateBloat.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+    - label: stage2_40tps
+      txDuration: 30
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 40
+      workload:
+        module: benchmarks/stateBloat.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
+    - label: stage3_100tps
+      txDuration: 60
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 100
+      workload:
+        module: benchmarks/stateBloat.js
+        arguments:
+          slotsPerTx: 200
+          numContracts: 30
+          contractPrefix: SB
